@@ -1,0 +1,404 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Student Enrollment Form</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://login2explore.com/jpdb/resources/js/0.0.3/jpdb-commons.js"></script>
+</head>
+
+<body>
+<div class="container">
+
+    <h2>Student Enrollment Form</h2>
+
+    <form id="studentForm" onsubmit="return false;">
+
+        <div class="form-group">
+            <label>Roll No:</label>
+            <input type="text" class="form-control" id="rollNo" placeholder="Enter Roll No">
+        </div>
+
+        <div class="form-group">
+            <label>Full Name:</label>
+            <input type="text" class="form-control" id="fullName" placeholder="Enter Full Name">
+        </div>
+
+        <div class="form-group">
+            <label>Class:</label>
+            <input type="text" class="form-control" id="studentClass" placeholder="Enter Class">
+        </div>
+
+        <div class="form-group">
+            <label>Birth Date:</label>
+            <input type="date" class="form-control" id="birthDate">
+        </div>
+
+        <div class="form-group">
+            <label>Address:</label>
+            <textarea class="form-control" id="address" placeholder="Enter Address"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Enrollment Date:</label>
+            <input type="date" class="form-control" id="enrollmentDate">
+        </div>
+
+        <button type="button" class="btn btn-primary" id="save" onclick="saveStudent()">Save</button>
+
+        <button type="button" class="btn btn-success" id="update" onclick="updateStudent()">Update</button>
+
+        <button type="button" class="btn btn-default" onclick="resetForm()">Reset</button>
+
+    </form>
+
+    <br>
+    <div id="message"></div>
+
+</div>
+
+<script>
+
+var connToken = "CONNECTION_TOKEN_HERE(HIDDEN FOR PRIVACY)";
+
+var dbBaseUrl = "http://api.login2explore.com:5577";
+var irlPartUrl = "/api/irl";
+var imlPartUrl = "/api/iml";
+
+var dbName = "SCHOOL-DB";
+var relName = "STUDENT-TABLE";
+
+var recordNumber = "";
+var formMode = "";
+
+function showMessage(message, type) {
+    $("#message").html("<span class='text-" + type + "'>" + message + "</span>");
+}
+
+function validateToken() {
+
+    if (connToken === "" || connToken === "CONNECTION_TOKEN_HERE") {
+        alert("Please enter your JPDB connection token.");
+        return false;
+    }
+
+    if (typeof executeCommandAtGivenBaseUrl !== "function") {
+        alert("JPDB library is not loaded. Check the library URL.");
+        return false;
+    }
+
+    return true;
+}
+
+function executeJPDBRequest(request, endpoint) {
+
+    $.ajaxSetup({async: false});
+
+    try {
+        return executeCommandAtGivenBaseUrl(
+            request,
+            dbBaseUrl,
+            endpoint
+        );
+    } finally {
+        $.ajaxSetup({async: true});
+    }
+}
+
+function checkRollNo() {
+
+    var rollNo = $("#rollNo").val().trim();
+
+    if (rollNo === "") {
+        return;
+    }
+
+    if (!validateToken()) {
+        return;
+    }
+
+    try {
+
+        var jsonStr = JSON.stringify({
+            "Roll-No": rollNo
+        });
+
+        var request = createGET_BY_KEYRequest(
+            connToken,
+            dbName,
+            relName,
+            jsonStr,
+            false,
+            false
+        );
+
+        var result = executeJPDBRequest(request, irlPartUrl);
+
+        console.log("Lookup response:", result);
+
+        if (result && result.status === 200) {
+
+            var data = result.data;
+
+            if (typeof data === "string") {
+                data = JSON.parse(data);
+            }
+
+            var student = data.record;
+
+            if (typeof student === "string") {
+                student = JSON.parse(student);
+            }
+
+            if (!student || data.rec_no === undefined) {
+                showMessage("Unexpected response from JPDB. Check Console.", "danger");
+                return;
+            }
+
+            recordNumber = data.rec_no;
+            formMode = "update";
+
+            $("#fullName").val(student["Full-Name"] || "");
+            $("#studentClass").val(student["Class"] || "");
+            $("#birthDate").val(student["Birth-Date"] || "");
+            $("#address").val(student["Address"] || "");
+            $("#enrollmentDate").val(student["Enrollment-Date"] || "");
+
+            showMessage("Existing student found. You can update the details.", "success");
+
+            alert("Existing student record found.");
+
+        } else if (
+            result &&
+            result.status === 400 &&
+            /not found|no data|no record|data not found/i.test(result.message || "")
+        ) {
+
+            recordNumber = "";
+            formMode = "save";
+
+            showMessage("New Roll No. Enter the student details.", "info");
+
+            alert("New student. You can save the details.");
+
+        } else {
+
+            showMessage(
+                "Lookup failed: " + (result ? result.message : "No response"),
+                "danger"
+            );
+
+            alert("JPDB Lookup Status: " + (result ? result.status : "No response"));
+
+        }
+
+    } catch (error) {
+
+        showMessage("Error: " + error.message, "danger");
+        console.error(error);
+
+    }
+}
+
+function validateStudentData() {
+
+    var rollNo = $("#rollNo").val().trim();
+    var fullName = $("#fullName").val().trim();
+    var studentClass = $("#studentClass").val().trim();
+    var birthDate = $("#birthDate").val();
+    var address = $("#address").val().trim();
+    var enrollmentDate = $("#enrollmentDate").val();
+
+    if (rollNo === "") {
+        alert("Roll No is required.");
+        return null;
+    }
+
+    if (fullName === "") {
+        alert("Full Name is required.");
+        return null;
+    }
+
+    if (studentClass === "") {
+        alert("Class is required.");
+        return null;
+    }
+
+    if (birthDate === "") {
+        alert("Birth Date is required.");
+        return null;
+    }
+
+    if (address === "") {
+        alert("Address is required.");
+        return null;
+    }
+
+    if (enrollmentDate === "") {
+        alert("Enrollment Date is required.");
+        return null;
+    }
+
+    if (birthDate > enrollmentDate) {
+        alert("Birth Date cannot be after Enrollment Date.");
+        return null;
+    }
+
+    return {
+        "Roll-No": rollNo,
+        "Full-Name": fullName,
+        "Class": studentClass,
+        "Birth-Date": birthDate,
+        "Address": address,
+        "Enrollment-Date": enrollmentDate
+    };
+}
+
+function saveStudent() {
+
+    if (!validateToken()) {
+        return;
+    }
+
+    var student = validateStudentData();
+
+    if (!student) {
+        return;
+    }
+
+    if (formMode === "update") {
+        alert("This Roll No already exists. Use Update instead.");
+        return;
+    }
+
+    try {
+
+        var request = createPUTRequest(
+            connToken,
+            JSON.stringify(student),
+            dbName,
+            relName
+        );
+
+        var result = executeJPDBRequest(request, imlPartUrl);
+
+        console.log("Save response:", result);
+
+        alert("Save Execution Status Code: " + (result ? result.status : "No response"));
+
+        if (result && result.status === 200) {
+
+            showMessage("Student record saved successfully.", "success");
+            resetForm();
+
+        } else {
+
+            showMessage("Save failed: " + (result ? result.message : "No response"), "danger");
+
+        }
+
+    } catch (error) {
+
+        showMessage("Save Error: " + error.message, "danger");
+        console.error(error);
+
+    }
+}
+
+function updateStudent() {
+
+    if (!validateToken()) {
+        return;
+    }
+
+    if (formMode !== "update" || recordNumber === "") {
+        alert("First enter an existing Roll No and check it.");
+        return;
+    }
+
+    var student = validateStudentData();
+
+    if (!student) {
+        return;
+    }
+
+    var updateData = {
+        "Full-Name": student["Full-Name"],
+        "Class": student["Class"],
+        "Birth-Date": student["Birth-Date"],
+        "Address": student["Address"],
+        "Enrollment-Date": student["Enrollment-Date"]
+    };
+
+    try {
+
+        var request = createUPDATERecordRequest(
+            connToken,
+            JSON.stringify(updateData),
+            dbName,
+            relName,
+            recordNumber
+        );
+
+        var result = executeJPDBRequest(request, imlPartUrl);
+
+        console.log("Update response:", result);
+
+        alert("Update Execution Status Code: " + (result ? result.status : "No response"));
+
+        if (result && result.status === 200) {
+
+            showMessage("Student record updated successfully.", "success");
+            resetForm();
+
+        } else {
+
+            showMessage("Update failed: " + (result ? result.message : "No response"), "danger");
+
+        }
+
+    } catch (error) {
+
+        showMessage("Update Error: " + error.message, "danger");
+        console.error(error);
+
+    }
+}
+
+function resetForm() {
+
+    $("#studentForm")[0].reset();
+
+    recordNumber = "";
+    formMode = "";
+
+    showMessage("", "info");
+
+}
+
+$(document).ready(function() {
+
+    $("#rollNo").on("keydown", function(event) {
+
+        if (event.key === "Enter") {
+            event.preventDefault();
+            checkRollNo();
+        }
+
+    });
+
+    $("#rollNo").on("blur", function() {
+        checkRollNo();
+    });
+
+});
+
+</script>
+
+</body>
+</html>
